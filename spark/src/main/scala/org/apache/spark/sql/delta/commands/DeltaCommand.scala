@@ -241,18 +241,18 @@ trait DeltaCommand extends DeltaLogging {
       tableIdentifier: Option[TableIdentifier],
       operationName: String,
       hadoopConf: Map[String, String] = Map.empty): DeltaLog = {
-    val tablePath =
+    val deltaLog =
       if (path.nonEmpty) {
-        new Path(path.get)
+        DeltaLog.forTable(spark, new Path(path.get), hadoopConf)
       } else if (tableIdentifier.nonEmpty) {
         val sessionCatalog = spark.sessionState.catalog
         lazy val metadata = sessionCatalog.getTableMetadata(tableIdentifier.get)
 
         DeltaTableIdentifier(spark, tableIdentifier.get) match {
           case Some(id) if id.path.nonEmpty =>
-            new Path(id.path.get)
+            DeltaLog.forTable(spark, new Path(id.path.get), hadoopConf)
           case Some(id) if id.table.nonEmpty =>
-            new Path(metadata.location)
+            DeltaLog.forTable(spark, metadata, hadoopConf)
           case _ =>
             if (metadata.tableType == CatalogTableType.VIEW) {
               throw DeltaErrors.viewNotSupported(operationName)
@@ -264,7 +264,6 @@ trait DeltaCommand extends DeltaLogging {
       }
 
     val startTime = Some(System.currentTimeMillis)
-    val deltaLog = DeltaLog.forTable(spark, tablePath, hadoopConf)
     if (deltaLog.update(checkIfUpdatedSinceTs = startTime).version < 0) {
       throw DeltaErrors.notADeltaTableException(
         operationName,
